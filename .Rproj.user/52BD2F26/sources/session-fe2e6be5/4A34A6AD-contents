@@ -1,0 +1,40 @@
+# Charger les bibliothèques nécessaires
+library(dplyr)
+library(ggplot2)
+
+# Supposons que vous avez un DataFrame `merged_data` avec les colonnes `ISO3`, `Year`, `Temperature_Change`, et `dengue_total`
+
+# Filtrer les pays avec au moins un cas de dengue
+countries_with_dengue <- merged_data %>%
+  group_by(ISO3) %>%
+  filter(any(dengue_total > 0)) %>%
+  ungroup() %>%
+  distinct(ISO3)
+
+# Fonction pour effectuer la régression linéaire et visualiser les résultats pour un pays donné
+analyze_country <- function(country_code) {
+  # Filtrer les données pour le pays donné
+  country_data <- merged_data %>% filter(ISO3 == country_code)
+  
+  # Effectuer la régression linéaire
+  model <- lm(dengue_total ~ Temperature_Change, data = country_data)
+  
+  # Afficher un résumé du modèle
+  print(paste("Résultats pour le pays :", country_code))
+  print(summary(model))
+  
+  # Prédire les valeurs
+  country_data$predicted_dengue <- predict(model, newdata = country_data)
+  
+  # Visualiser les résultats
+  ggplot(country_data, aes(x = Temperature_Change, y = dengue_total)) +
+    geom_point() +  # Points observés
+    geom_line(aes(y = predicted_dengue), color = "blue") +  # Ligne de régression
+    labs(title = paste("Régression linéaire : Cas de Dengue vs Changement de Température -", country_code),
+         x = "Changement de Température (°C)",
+         y = "Nombre de Cas de Dengue") +
+    theme_minimal()
+}
+
+# Analyser tous les pays avec des cas de dengue
+results <- lapply(countries_with_dengue$ISO3, analyze_country)
