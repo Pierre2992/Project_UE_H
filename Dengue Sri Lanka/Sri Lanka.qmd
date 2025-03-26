@@ -1,0 +1,280 @@
+---
+title: "Sri Lanka"
+format: html
+---
+
+```{r}
+# Charger les bibliothèques nécessaires
+library(dplyr)
+library(lubridate)
+
+# Charger le dataset météo
+weather_data <- read.csv("SriLanka_Weather_Dataset.csv")
+
+# Convertir la colonne `time` en format Date si ce n'est pas déjà fait
+weather_data$time <- as.Date(weather_data$time, format="%Y-%m-%d")
+
+# Extraire l'année et le mois de la colonne `time` pour créer une nouvelle colonne `year_month_first_day`
+weather_data$year_month_first_day <- as.Date(paste(year(weather_data$time), month(weather_data$time), "01", sep = "-"))
+
+# Vérifier les données avec la nouvelle colonne `year_month_first_day`
+head(weather_data)
+
+```
+
+```{r}
+# Agréger les données par mois et par ville, en calculant la moyenne pour les variables pertinentes
+monthly_weather_data <- weather_data %>%
+  group_by(year_month_first_day, city) %>%
+  summarise(
+    avg_precipitation_sums = mean(precipitation_sum, na.rm = TRUE), # Moyenne des précipitations
+    avg_precipitation_hours = mean(precipitation_hours, na.rm = TRUE),
+    avg_temperature_max = mean(temperature_2m_max, na.rm = TRUE),
+    avg_temperature_min = mean(temperature_2m_min, na.rm = TRUE),
+    avg_temperature_mean = mean(temperature_2m_mean, na.rm = TRUE),
+    avg_apparent_temperature_max = mean(apparent_temperature_max, na.rm = TRUE),
+    avg_apparent_temperature_min = mean(apparent_temperature_min, na.rm = TRUE),
+    avg_apparent_temperature_mean = mean(apparent_temperature_mean, na.rm = TRUE),
+    avg_sunrise = mean(as.numeric(sunrise), na.rm = TRUE), # Note : Vous devrez peut-être traiter les heures
+    avg_sunset = mean(as.numeric(sunset), na.rm = TRUE), # Idem pour sunset
+    avg_shortwave_radiation = mean(shortwave_radiation_sum, na.rm = TRUE),
+    avg_windspeed_max = mean(windspeed_10m_max, na.rm = TRUE),
+    avg_windgusts_max = mean(windgusts_10m_max, na.rm = TRUE),
+    avg_winddirection = mean(winddirection_10m_dominant, na.rm = TRUE),
+    avg_et0 = mean(et0_fao_evapotranspiration, na.rm = TRUE)
+  )
+
+# Vérifier les données agrégées par mois
+head(monthly_weather_data)
+
+```
+
+```{r}
+library(readxl)
+
+# Charger les données de dengue
+dengue_data <- read_excel("Dengue_Data (2010-2020).xlsx")
+
+# 3. Vérifier les noms des colonnes dans les deux datasets
+# Affiche les noms des colonnes pour vérifier qu'ils sont corrects
+print(names(dengue_data))  
+print(names(monthly_weather_data))
+
+# 4. Convertir les colonnes Date et year_month_first_day en format Date si ce n'est pas déjà fait
+dengue_data$Date <- as.Date(dengue_data$Date, format = "%Y-%m-%d")
+monthly_weather_data$year_month_first_day <- as.Date(monthly_weather_data$year_month_first_day, format = "%Y-%m-%d")
+
+# 5. Fusionner les deux datasets sur la colonne Date et city
+merged_data <- merge(dengue_data, monthly_weather_data, by.x = c("Date", "City"), by.y = c("year_month_first_day", "city"))
+
+# 6. Vérifier les premières lignes du dataset fusionné
+head(merged_data)
+
+# Optionnel: Vous pouvez enregistrer le fichier fusionné sous un nouveau nom
+write.csv(merged_data, "merged_dengue_weather_data.csv", row.names = FALSE)
+
+```
+```{r}
+# Convertir les colonnes en numériques si nécessaire
+merged_data$Value <- as.numeric(merged_data$Value)
+merged_data$avg_precipitation_sums <- as.numeric(merged_data$avg_precipitation_sums)
+```
+
+
+```{r}
+library(ggplot2)
+
+# Calculer la corrélation entre les précipitations et les cas de dengue
+correlation_precip_dengue <- cor(merged_data$Value, merged_data$avg_precipitation_sums, use = "complete.obs")
+
+# Afficher le résultat
+print(paste("La corrélation entre les précipitations et les cas de dengue est de", round(correlation_precip_dengue, 2)))
+
+# Graphique de la relation entre les précipitations et les cas de dengue
+ggplot(merged_data, aes(x = avg_precipitation_sums, y = Value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  theme_minimal() +
+  labs(title = "Relation entre les précipitations et les cas de dengue",
+       x = "Précipitations moyennes (mm)",
+       y = "Nombre de cas de dengue")
+
+```
+
+```{r}
+# Calculer la corrélation entre la température moyenne et les cas de dengue
+correlation_temp_dengue <- cor(merged_data$Value, merged_data$avg_temperature_mean, use = "complete.obs")
+
+# Afficher le résultat
+print(paste("La corrélation entre la température moyenne et les cas de dengue est de", round(correlation_temp_dengue, 2)))
+
+# Graphique de la relation entre la température moyenne et les cas de dengue
+ggplot(merged_data, aes(x = avg_temperature_mean, y = Value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  theme_minimal() +
+  labs(title = "Relation entre la température moyenne et les cas de dengue",
+       x = "Température moyenne (°C)",
+       y = "Nombre de cas de dengue")
+
+```
+```{r}
+# Calculer la corrélation entre la température moyenne et les cas de dengue
+correlation_precip_hours_dengue <- cor(merged_data$Value, merged_data$avg_precipitation_hours, use = "complete.obs")
+
+# Afficher le résultat
+print(paste("La corrélation entre la température moyenne et les cas de dengue est de", round(correlation_precip_hours_dengue, 2)))
+
+# Graphique de la relation entre la température moyenne et les cas de dengue
+ggplot(merged_data, aes(x = avg_temperature_mean, y = Value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "green") +
+  theme_minimal() +
+  labs(title = "Relation entre la température moyenne et les cas de dengue",
+       x = "Température moyenne (°C)",
+       y = "Nombre de cas de dengue")
+```
+
+
+
+
+```{r}
+# Graphique de la tendance des cas de dengue et des précipitations au fil du temps
+ggplot(merged_data, aes(x = as.Date(Date), y = Value)) +
+  geom_line(aes(color = "Cas de Dengue")) +
+  geom_line(aes(x = as.Date(Date), y = avg_precipitation_sums, color = "Précipitations")) +
+  theme_minimal() +
+  labs(title = "Evolution des cas de Dengue et des précipitations",
+       x = "Date",
+       y = "Valeurs") +
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "green"))
+
+```
+```{r}
+# Régression linéaire multiple pour prédire les cas de dengue
+model <- lm(Value ~ avg_temperature_mean + avg_precipitation_sums + avg_precipitation_hours, data = merged_data)
+
+# Résumé du modèle
+summary(model)
+
+# Prédictions
+predictions <- predict(model, newdata = merged_data)
+
+# Ajouter les prédictions au dataframe
+merged_data$predicted_dengue_cases <- predictions
+
+# Graphique des cas réels vs prédits
+ggplot(merged_data, aes(x = Value, y = predicted_dengue_cases)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  theme_minimal() +
+  labs(title = "Cas réels vs prédits de dengue",
+       x = "Cas réels",
+       y = "Cas prédits")
+
+```
+```{r}
+# Agréger les données par mois et par ville, en calculant la moyenne pour les variables pertinentes
+monthly_weather_data_sum <- weather_data %>%
+  group_by(year_month_first_day, city) %>%
+  summarise(
+    sum_precipitation = sum(precipitation_sum, na.rm = TRUE), # Moyenne des précipitations
+    sum_precipitation_hours = sum(precipitation_hours, na.rm = TRUE),
+    avg_temperature_max = mean(temperature_2m_max, na.rm = TRUE),
+    avg_temperature_min = mean(temperature_2m_min, na.rm = TRUE),
+    avg_temperature_mean = mean(temperature_2m_mean, na.rm = TRUE),
+    avg_apparent_temperature_max = mean(apparent_temperature_max, na.rm = TRUE),
+    avg_apparent_temperature_min = mean(apparent_temperature_min, na.rm = TRUE),
+    avg_apparent_temperature_mean = mean(apparent_temperature_mean, na.rm = TRUE),
+    avg_sunrise = mean(as.numeric(sunrise), na.rm = TRUE), # Note : Vous devrez peut-être traiter les heures
+    avg_sunset = mean(as.numeric(sunset), na.rm = TRUE), # Idem pour sunset
+    avg_shortwave_radiation = mean(shortwave_radiation_sum, na.rm = TRUE),
+    avg_windspeed_max = mean(windspeed_10m_max, na.rm = TRUE),
+    avg_windgusts_max = mean(windgusts_10m_max, na.rm = TRUE),
+    avg_winddirection = mean(winddirection_10m_dominant, na.rm = TRUE),
+    avg_et0 = mean(et0_fao_evapotranspiration, na.rm = TRUE)
+  )
+
+# Vérifier les données agrégées par mois
+head(monthly_weather_data_sum)
+
+# 5. Fusionner les deux datasets sur la colonne Date et city
+merged_data_sum <- merge(dengue_data, monthly_weather_data_sum, by.x = c("Date", "City"), by.y = c("year_month_first_day", "city"))
+```
+
+```{r}
+# Convertir les colonnes en numériques si nécessaire
+merged_data_sum$Value <- as.numeric(merged_data_sum$Value)
+merged_data_sum$sum_precipitation <- as.numeric(merged_data_sum$sum_precipitation)
+```
+
+```{r}
+# Calculer la corrélation entre les précipitations et les cas de dengue
+correlation_precip_dengue <- cor(merged_data_sum$Value, merged_data_sum$sum_precipitation, use = "complete.obs")
+
+# Afficher le résultat
+print(paste("La corrélation entre les précipitations et les cas de dengue est de", round(correlation_precip_dengue, 2)))
+
+# Graphique de la relation entre les précipitations et les cas de dengue
+ggplot(merged_data_sum, aes(x = sum_precipitation, y = Value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  theme_minimal() +
+  labs(title = "Relation entre les précipitations et les cas de dengue",
+       x = "Précipitations moyennes (mm)",
+       y = "Nombre de cas de dengue")
+```
+
+```{r}
+# Calculer la corrélation entre la température moyenne et les cas de dengue
+correlation_precip_hours_dengue <- cor(merged_data_sum$Value, merged_data_sum$sum_precipitation_hours, use = "complete.obs")
+
+# Afficher le résultat
+print(paste("La corrélation entre la température moyenne et les cas de dengue est de", round(correlation_precip_hours_dengue, 2)))
+
+# Graphique de la relation entre la température moyenne et les cas de dengue
+ggplot(merged_data_sum, aes(x = sum_precipitation_hours, y = Value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "green") +
+  theme_minimal() +
+  labs(title = "Relation entre la température moyenne et les cas de dengue",
+       x = "Température moyenne (°C)",
+       y = "Nombre de cas de dengue")
+```
+
+```{r}
+# Graphique de la tendance des cas de dengue et des précipitations au fil du temps
+ggplot(merged_data_sum, aes(x = as.Date(Date), y = Value)) +
+  geom_line(aes(color = "Cas de Dengue")) +
+  geom_line(aes(x = as.Date(Date), y = sum_precipitation, color = "Précipitations")) +
+  theme_minimal() +
+  labs(title = "Evolution des cas de Dengue et des précipitations",
+       x = "Date",
+       y = "Valeurs") +
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "green"))
+```
+
+```{r}
+# Graphique de la tendance des cas de dengue et des précipitations au fil du temps
+ggplot(merged_data_sum, aes(x = as.Date(Date), y = Value)) +
+  geom_line(aes(color = "Cas de Dengue")) +
+  geom_line(aes(x = as.Date(Date), y = sum_precipitation_hours, color = "Précipitations")) +
+  theme_minimal() +
+  labs(title = "Evolution des cas de Dengue et des précipitations",
+       x = "Date",
+       y = "Valeurs") +
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "green"))
+```
+
+```{r}
+# Graphique de la tendance des cas de dengue et des précipitations au fil du temps
+ggplot(merged_data_sum, aes(x = as.Date(Date), y = Value)) +
+  geom_line(aes(color = "Cas de Dengue")) +
+  geom_line(aes(x = as.Date(Date), y = avg_temperature_mean, color = "Température moyenne")) +
+  theme_minimal() +
+  labs(title = "Evolution des cas de Dengue et des précipitations",
+       x = "Date",
+       y = "Valeurs") +
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Température moyenne" = "green"))
+```
+
