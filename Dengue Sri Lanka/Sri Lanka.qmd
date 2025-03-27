@@ -135,6 +135,24 @@ ggplot(merged_data, aes(x = avg_temperature_mean, y = Value)) +
        y = "Nombre de cas de dengue")
 ```
 
+```{r}
+library(ggplot2)
+
+# Calculer la corrélation entre les précipitations et les cas de dengue
+correlation_precip_dengue <- cor(merged_data$Value, merged_data$avg_windspeed_max, use = "complete.obs")
+
+# Afficher le résultat
+print(paste("La corrélation entre les précipitations et les cas de dengue est de", round(correlation_precip_dengue, 2)))
+
+# Graphique de la relation entre les précipitations et les cas de dengue
+ggplot(merged_data, aes(x = avg_windspeed_max, y = Value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  theme_minimal() +
+  labs(title = "Relation entre les précipitations et les cas de dengue",
+       x = "Précipitations moyennes (mm)",
+       y = "Nombre de cas de dengue")
+```
 
 
 
@@ -152,7 +170,7 @@ ggplot(merged_data, aes(x = as.Date(Date), y = Value)) +
 ```
 ```{r}
 # Régression linéaire multiple pour prédire les cas de dengue
-model <- lm(Value ~ avg_temperature_mean + avg_precipitation_sums + avg_precipitation_hours, data = merged_data)
+model <- lm(Value ~ avg_temperature_mean + avg_precipitation_sums + avg_precipitation_hours + avg_windspeed_max, data = merged_data)
 
 # Résumé du modèle
 summary(model)
@@ -251,7 +269,7 @@ ggplot(merged_data_sum, aes(x = as.Date(Date), y = Value)) +
   labs(title = "Evolution des cas de Dengue et des précipitations",
        x = "Date",
        y = "Valeurs") +
-  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "green"))
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "red"))
 ```
 
 ```{r}
@@ -263,7 +281,7 @@ ggplot(merged_data_sum, aes(x = as.Date(Date), y = Value)) +
   labs(title = "Evolution des cas de Dengue et des précipitations",
        x = "Date",
        y = "Valeurs") +
-  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "green"))
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Précipitations" = "red"))
 ```
 
 ```{r}
@@ -275,6 +293,215 @@ ggplot(merged_data_sum, aes(x = as.Date(Date), y = Value)) +
   labs(title = "Evolution des cas de Dengue et des précipitations",
        x = "Date",
        y = "Valeurs") +
-  scale_color_manual(values = c("Cas de Dengue" = "blue", "Température moyenne" = "green"))
+  scale_color_manual(values = c("Cas de Dengue" = "blue", "Température moyenne" = "red"))
+```
+```{r}
+# Régression linéaire multiple pour prédire les cas de dengue
+model <- lm(Value ~ sum_precipitation + sum_precipitation_hours + avg_temperature_mean + avg_apparent_temperature_mean + avg_windspeed_max, data = merged_data_sum)
+
+# Résumé du modèle
+summary(model)
+
+# Prédictions
+predictions <- predict(model, newdata = merged_data_sum)
+
+# Ajouter les prédictions au dataframe
+merged_data_sum$predicted_dengue_cases <- predictions
+
+# Graphique des cas réels vs prédits
+ggplot(merged_data_sum, aes(x = Value, y = predicted_dengue_cases)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  theme_minimal() +
+  labs(title = "Cas réels vs prédits de dengue",
+       x = "Cas réels",
+       y = "Cas prédits")
+```
+
+```{r}
+location <- read.csv("locationData.csv")
+
+# Dictionnaire de correction : Clé = Mauvais nom / Valeur = Nom correct
+corrections <- c(
+  "N eliya" = "Nuwara Eliya",
+  "Killinochchi" = "Kilinochchi",
+  "Vauniya" = "Vavuniya",
+  "Mulative" = "Mullaitivu",
+  "Battocolo" = "Batticaloa",
+  "Puttalama" = "Puttalam",
+  "Anuradapura" = "Anuradhapura",
+  "Monaragala" = "Moneragala",
+  "Rathnapura" = "Ratnapura",
+  "Kegalla" = "Kegalle",
+  "Kalminai" = "Kalmunai"
+)
+
+# Appliquer les corrections sur les noms de villes du dataset dengue_data
+dengue_data <- dengue_data %>%
+  mutate(City = recode(City, !!!corrections))
+
+merged_dengue_map <- merge(dengue_data, location, by.x = c("City"), by.y = c("city_name"))
+
+print(unique(location$city_name))
+print (unique(dengue_data$City))
+
+head(merged_dengue_map)
+```
+
+```{r}
+# Appliquer les corrections sur les noms de villes du dataset dengue_data
+merged_data_sum <- merged_data_sum %>%
+  mutate(City = recode(City, !!!corrections))
+
+merged_precip_map <- merge(merged_data_sum, location, by.x = c("City"), by.y = c("city_name"))
+
+head(merged_precip_map)
+```
+
+
+```{r}
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(lubridate)
+
+# Convertir les dates en format Date
+merged_dengue_map$Date <- as.Date(merged_dengue_map$Date)
+
+# Récupérer les dates uniques de la colonne Date (premiers jours de chaque mois)
+dates_uniques <- sort(unique(merged_dengue_map$Date))  # Trier les dates uniques
+
+# Interface utilisateur
+ui <- fluidPage(
+    titlePanel("Évolution des cas de dengue au Sri Lanka"),
+    
+    sidebarLayout(
+        sidebarPanel(
+            sliderInput("selected_date",
+                        "Sélectionner une date :",
+                        min = min(dates_uniques),
+                        max = max(dates_uniques),
+                        value = min(dates_uniques),
+                        step = NULL,  # Pas de step ici, ce n'est pas nécessaire
+                        animate = TRUE,  # Animation activée pour des transitions lisses
+                        timeFormat = "%Y-%m-%d",  # Format de date à afficher
+                        ticks = FALSE  # Désactive les ticks entre les dates
+            )
+        ),
+        
+        mainPanel(
+            leafletOutput("dengueMap")
+        )
+    )
+)
+
+# Serveur de l'application
+server <- function(input, output, session) {
+    
+    # Fonction pour obtenir le premier jour du mois de la date sélectionnée
+    first_day_of_month <- function(date) {
+        return(as.Date(format(date, "%Y-%m-01")))
+    }
+
+    # Filtrer les données selon le premier jour du mois de la date sélectionnée
+    filtered_data <- reactive({
+        first_day <- first_day_of_month(input$selected_date)
+        filtered <- merged_dengue_map %>% filter(Date == first_day)
+        
+        # Ajouter un message de débogage pour vérifier si des données sont présentes
+        if (nrow(filtered) == 0) {
+            showModal(modalDialog(
+                title = "Aucune donnée disponible",
+                paste("Il n'y a pas de données pour la date : ", first_day),
+                easyClose = TRUE,
+                footer = NULL
+            ))
+        }
+        
+        return(filtered)
+    })
+    
+    # Créer la carte Leaflet
+    output$dengueMap <- renderLeaflet({
+        leaflet() %>%
+            addTiles() %>%
+            setView(lng = 80.7718, lat = 7.8731, zoom = 7)  # Centré sur le Sri Lanka
+    })
+    
+    # Mettre à jour la carte en fonction des données filtrées
+    observe({
+        data <- filtered_data()
+        
+        # Si des données sont présentes, mettre à jour la carte
+        if (nrow(data) > 0) {
+            leafletProxy("dengueMap", data = data) %>%
+                clearMarkers() %>%
+                addCircleMarkers(
+                    lng = data$longitude,
+                    lat = data$latitude,
+                    radius = sqrt(data$Value) * 0.5,  # Taille des cercles en fonction des cas
+                    color = "red",
+                    fillOpacity = 0.5,
+                    popup = ~paste0("<b>Ville: </b>", City, "<br><b>Cas: </b>", Value)
+                )
+        }
+    })
+}
+
+# Lancer l'application
+shinyApp(ui, server)
+
+```
+
+```{r}
+# Sélectionner uniquement les variables numériques à utiliser pour le clustering
+clustering_data <- merged_data_sum %>%
+  select(
+    sum_precipitation, 
+    sum_precipitation_hours, 
+    avg_temperature_mean, 
+    avg_apparent_temperature_mean,
+    avg_shortwave_radiation,
+    avg_windspeed_max,
+    avg_windgusts_max,
+  )
+
+# Normaliser les données
+clustering_data_scaled <- scale(clustering_data)
+
+```
+
+```{r}
+# Appliquer la méthode du coude pour choisir le nombre de clusters
+wss <- sapply(1:10, function(k) {
+  kmeans(clustering_data_scaled, centers = k, nstart = 25)$tot.withinss
+})
+
+# Tracer la courbe du coude
+plot(1:10, wss, type = "b", pch = 19, xlab = "Nombre de clusters", ylab = "Somme des distances au centre")
+
+```
+
+```{r}
+# Appliquer le K-means avec 3 clusters
+set.seed(123)  # Pour garantir la reproductibilité
+kmeans_result <- kmeans(clustering_data_scaled, centers = 3, nstart = 25)
+
+# Ajouter les labels des clusters à vos données
+merged_data_sum$cluster <- kmeans_result$cluster
+
+```
+
+```{r}
+# Appliquer une PCA pour réduire la dimensionnalité à 2 composantes principales
+pca_result <- prcomp(clustering_data_scaled)
+
+# Tracer les résultats de la PCA avec les clusters
+library(ggplot2)
+ggplot(data = data.frame(pca_result$x), aes(x = PC1, y = PC2, color = factor(merged_data_sum$cluster))) +
+  geom_point() +
+  labs(color = "Cluster") +
+  ggtitle("Clustering des données avec K-means (PCA)")
+
 ```
 
