@@ -9,7 +9,7 @@ library(sf)
 library(geojsonsf)
 
 # Chargement des données
-dengue_data <- read_csv("National-level data_AFGHANISTAN_19240120_20230930.csv")
+dengue_data <- read_csv("dengue_data.csv")
 
 # Transformation des données dengue
 dengue_data <- dengue_data %>%
